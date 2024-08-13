@@ -5,7 +5,7 @@ like any normal key-value store.
 
 ## What and why?
 
-The main usecase of this is to deal with the fragmented world of storing data
+The main use case of this is to deal with the fragmented world of storing data
 from a browser.
 
 You can store data in `localStorage`, an indexed DB, or the origin-private
@@ -22,9 +22,10 @@ fragilities:
 
  * It's a Chrome-specific option (plus all the Chomealikes).
  * The user interface can be extremely confusing.
- * The `createWritable` interface for files is fragile to early cancellation, so
-   you need to make sure to write many small files, instead of several large
-   files.
+ * The `createWritable` interface for files is fragile to early cancellation: if
+   you cancel writing (e.g. by navigating away from the page), the intermediary
+   file is deleted. So, you need to make sure to write many small files, instead
+   of several large files or any streaming files.
 
 (The previous two options can be implemented by my own
 [nonlocalForage](https://github.com/Yahweasel/nonlocal-forage) )
@@ -40,6 +41,11 @@ later (and get a `File` object), and AOKV provides an interface to use that as a
 read-only key-value store. The data is saved eagerly, so early interruption
 still yields a valid store.
 
+Note that if you're using this with a download, as suggested above, and the
+download is either explicitly canceled or implicitly canceled (e.g., due to
+running out of disk space), most browsers *delete* the intermediary file, so all
+data is lost. Oh well, can't fix everything...
+
 
 ## How
 
@@ -49,7 +55,7 @@ is the export). `AOKV.AOKVW` is a class for writing AOKV streams, and
 
 `aokvr.js` exposes `AOKVR` with only the reading side (`AOKVR.AOKVR`), and
 `aokvw.js` exposes `AOKVW` with only the writing side (`AOKVW.AOKVW`). You can
-also import this module as `"aokv/read"` to get only the reading side, and
+also import this module as `"aokv/read"` to get only the reading side, or
 `"aokv/write"` to get only the writing side.
 
 
@@ -67,7 +73,7 @@ from this stream as soon as you create the `AOKVW`, so data doesn't buffer.
 
 To set an item in the store, use `await w.setItem(key, value);`. The key must be
 a string, and the value can be anything JSON-serializable, or any ArrayBuffer or
-TypedArray. This is named `setItem` to be familiar to users of
+TypedArray. This and many other names are chosen to be familiar to users of
 [localForage](https://localforage.github.io/localForage/)
 
 `await w.removeItem(key);` is provided to “remove” an item from the store, but
@@ -75,6 +81,10 @@ it's important to note that nothing can truly be removed, since the store is
 only ever appended to. Instead, this is just a convenience function to set the
 item to `null`, as `getItem` (below) returns `null` for items that are not in
 the store.
+
+Because AOKV files are *append-only* stores, you should be mindful of how you
+use them. If you set the same key over and over again, you will take a lot of
+space, because the previous, discarded values are all still saved.
 
 To end the stream, use `await w.end()`. This is technically optional, as
 truncated AOKV files are valid, but probably useful for whatever you're using to
@@ -95,18 +105,22 @@ As it is common to use `AOKVR` with `Blob`s (or `File`s, which are a subtype of
 `AOKV.blobToPread`. Use it like so: `r = new
 AOKV.AOKVR(AOKV.blobToPread(file));`.
 
-Once you've created the `AOKVR` instance, before accessing keys, you must index
+Once you've created the `AOKVR` instance, before accessing data, you must index
 the file. Do so with `await r.index();`. `r.index` has some options to control
 how it validates that this is an AOKV file, but they should usually be left as
 default.
 
 After indexing, there are two accessors available. Use `r.keys()` to get an
 array of all the keys in the store. It is not necessary to `await r.keys()`, as
-the indexing process makes the list of keys available eagerly.
+the indexing process makes the list of available keys eagerly.
 
 Use `await r.getItem(key)` to get the item associated with the given key. This
 function will return `null` if the key is not set, if the data for this key was
 truncated, or (of course) if it was set to `null`.
+
+Because AOKV files are *append-only* stores, every value assigned to any key is
+technically available in the file. The reader interface only exposes the last
+one (which is the standard behavior of a key-value store).
 
 
 ## Format
@@ -120,9 +134,10 @@ first block in the file.
 An AOKV block consists of a block header, the key (in UTF-8), and a body.
 
 A block header is four 32-bit unsigned integers. The first two are just
-identification magic, and are always 0x564b4f41, 0x93c1af97. The third word is
-the length of the key in bytes, and the fourth word is the length of the body in
-bytes.
+identification magic, and are always 0x564b4f41, 0x93c1af97. Note that in
+little-endian, the first value is the ASCII string `"AOKV"`. The second is just
+a random, unique number for identification. The third word is the length of the
+key in bytes, and the fourth word is the length of the body in bytes.
 
 The key is simply a UTF-8 string.
 
