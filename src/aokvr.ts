@@ -102,7 +102,7 @@ export class AOKVR {
      * Get an item. Returns null if the item is absent.
      * @param key  Key to look up.
      */
-    async getItem(key: string) {
+    async getItem<T>(key: string) {
         const info = this._index[key];
         if (!info)
             return null;
@@ -111,7 +111,7 @@ export class AOKVR {
         if (!body || body.length < info.size)
             return null;
 
-        return ser.deserialize(body, this._decompress);
+        return <T> ser.deserialize(body, this._decompress);
     }
 
     /**

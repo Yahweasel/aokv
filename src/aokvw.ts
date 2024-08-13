@@ -49,11 +49,12 @@ export class AOKVW {
      * @param key  Key to set.
      * @param value  Value to assign to the key. Must be serializable.
      */
-    async setItem(key: string, value: any) {
+    async setItem<T>(key: string, value: T) {
         const buf = await ser.serialize(key, value, this._compress);
         this._buf.push(buf);
         if (this._push)
             this._push();
+        return value;
     }
 
     /**
@@ -61,8 +62,8 @@ export class AOKVW {
      * append-only store, so this just sets it to null.
      * @param key  Key to remove.
      */
-    removeItem(key: string) {
-        return this.setItem(key, null);
+    async removeItem(key: string) {
+        await this.setItem(key, null);
     }
 
     /**
