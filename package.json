@@ -1,0 +1,31 @@
+{
+  "name": "aokv",
+  "version": "0.0.1",
+  "description": "Append-only key-value store",
+  "main": "dist/aokv.js",
+  "types": "src/aokv.ts",
+  "exports": {
+    ".": "./dist/aokv.js",
+    "./write": "./dist/aokvw.js",
+    "./read": "./dist/aokvr.js"
+  },
+  "devDependencies": {
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "rollup": "^4.12.1",
+    "tslib": "^2.6.3"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "rollup -c"
+  },
+  "keywords": [
+    "localstorage",
+    "key-value store",
+    "store",
+    "database",
+    "file"
+  ],
+  "author": "Yahweasel",
+  "license": "ISC"
+}
