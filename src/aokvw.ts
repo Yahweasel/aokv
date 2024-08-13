@@ -28,6 +28,7 @@ export class AOKVW {
         private _compress?: (x: Uint8Array) => Promise<Uint8Array>
     ) {
         this._buf = [];
+        this._size = 0;
 
         this.stream = new ReadableStream<Uint8Array>({
             pull: async (controller) => {
@@ -54,6 +55,7 @@ export class AOKVW {
         this._buf.push(buf);
         if (this._push)
             this._push();
+        this._size += buf.length;
         return value;
     }
 
@@ -64,6 +66,13 @@ export class AOKVW {
      */
     async removeItem(key: string) {
         await this.setItem(key, null);
+    }
+
+    /**
+     * Get the total size of all data written thusfar, in bytes.
+     */
+    size() {
+        return this._size;
     }
 
     /**
@@ -91,4 +100,10 @@ export class AOKVW {
      * Callback if the stream is currently waiting.
      */
     private _push?: () => void;
+
+    /**
+     * @private
+     * Total size of all data written thusfar.
+     */
+    private _size: number;
 }

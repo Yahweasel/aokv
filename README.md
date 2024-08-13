@@ -83,9 +83,14 @@ only ever appended to. Instead, this is just a convenience function to set the
 item to `null`, as `getItem` (below) returns `null` for items that are not in
 the store.
 
+`AOKVW` also provides a `size` method, which returns the amount of data that's
+been written to the stream so far, in bytes, e.g., `w.size()`. You do not need
+to `await w.size()`.
+
 Because AOKV files are *append-only* stores, you should be mindful of how you
 use them. If you set the same key over and over again, you will take a lot of
-space, because the previous, discarded values are all still saved.
+space, because the previous, discarded values are all still saved. The size is
+monotonically increasing.
 
 To end the stream, use `await w.end()`. This is technically optional, as
 truncated AOKV files are valid, but probably useful for whatever you're using to
