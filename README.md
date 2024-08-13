@@ -14,7 +14,7 @@ browser feels like it. That's bad for the web app, and bad for the user.
 
 You can store data in cloud storage, but that requires a whole extra interface
 and sometimes-onerous auditing and licensing. Plus, it's not really a solution
-to storing user data to not allow them to store it themselves.
+to storing user data if you don't allow them to store it themselves.
 
 On Chrome, you can store data in a local directory, by using
 `showDirectoryPicker`. This is one of the better options, but has some
@@ -36,10 +36,11 @@ data isn't naturally file-like, or has many subparts, what exactly do you put
 *into* that stream?
 
 AOKV is the answer to that question. It provides an interface for using a stream
-of bytes as a write-only key-value store. The user can then select that file
-later (and get a `File` object), and AOKV provides an interface to use that as a
-read-only key-value store. The data is saved eagerly, so early interruption
-still yields a valid store.
+of bytes as a write-only key-value store. That stream can be streamed as a
+downloaded file with something like StreamSaver.js. The user can then select
+that file later (and get a `File` object), and AOKV provides an interface to use
+that as a read-only key-value store. The data is saved eagerly, so early
+interruption still yields a valid store.
 
 Note that if you're using this with a download, as suggested above, and the
 download is either explicitly canceled or implicitly canceled (e.g., due to
