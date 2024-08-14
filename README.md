@@ -85,7 +85,8 @@ The file ID, if used, is to distinguish your application's AOKV files from other
 AOKV files. You must use the same ID for writing and reading.
 
 The optional compression function, if present, will be used to compress each
-entry in the store.
+entry in the store. `AOKV.zlibRawCompress` is available as a compression
+function, using `CompressionStream` where available.
 
 The `AOKVW` object exposes its output as the field `stream` (e.g., `w.stream`),
 which is a `ReadableStream` of `Uint8Array` chunks. You should start reading
@@ -155,6 +156,8 @@ a `Uint8Array`. A short read or `null` are acceptable returns for end-of-file.
 
 The file ID, if present, should be the same as used in `AOKVW`, and
 `decompress`, if present, should be the reverse of `compress` in `AOKVW`.
+`AOKV.zlibRawDecompress` is available as a compression function, using
+`DecompressionStream` where available.
 
 As it is common to use `AOKVR` with `Blob`s (or `File`s, which are a subtype of
 `Blob`), a convenience function is provided to create a `pread` for `Blob`s,

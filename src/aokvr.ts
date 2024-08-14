@@ -239,3 +239,37 @@ export function blobToPread(file: Blob) {
         return new Uint8Array(await part.arrayBuffer());
     };
 }
+
+/**
+ * A convenience decompression function that uses DecompressionStream if available.
+ */
+export async function zlibRawDecompress(x: Uint8Array) {
+    try {
+        const s = new DecompressionStream("deflate-raw");
+        const wr = s.writable.getWriter();
+        wr.write(x);
+        wr.close();
+
+        const rd = s.readable.getReader();
+        const parts: Uint8Array[] = [];
+        let len = 0;
+        while (true) {
+            const part = await rd.read();
+            if (part.done)
+                break;
+            parts.push(part.value);
+            len += part.value.length;
+        }
+
+        const ret = new Uint8Array(len);
+        let o = 0;
+        for (const part of parts) {
+            ret.set(part, o);
+            o += part.length;
+        }
+
+        return ret;
+    } catch (ex) {}
+
+    return x;
+}

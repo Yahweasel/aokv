@@ -204,3 +204,37 @@ export class AOKVW {
      */
     private _compress?: (x: Uint8Array) => Promise<Uint8Array>;
 }
+
+/**
+ * A convenience compression function that uses CompressionStream if available.
+ */
+export async function zlibRawCompress(x: Uint8Array) {
+    try {
+        const s = new CompressionStream("deflate-raw");
+        const wr = s.writable.getWriter();
+        wr.write(x);
+        wr.close();
+
+        const rd = s.readable.getReader();
+        const parts: Uint8Array[] = [];
+        let len = 0;
+        while (true) {
+            const part = await rd.read();
+            if (part.done)
+                break;
+            parts.push(part.value);
+            len += part.value.length;
+        }
+
+        const ret = new Uint8Array(len);
+        let o = 0;
+        for (const part of parts) {
+            ret.set(part, o);
+            o += part.length;
+        }
+
+        return ret;
+    } catch (ex) {}
+
+    return x;
+}
