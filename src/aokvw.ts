@@ -14,6 +14,7 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+import * as f from "./format";
 import * as ser from "./serializer";
 
 /**
@@ -29,6 +30,10 @@ export class AOKVW {
     ) {
         this._buf = [];
         this._size = 0;
+        this._index = Object.create(null);
+        this._lastIndex = 1;
+        this._kvpSize = 0;
+        this._indexSize = 0;
 
         this.stream = new ReadableStream<Uint8Array>({
             pull: async (controller) => {
@@ -51,11 +56,24 @@ export class AOKVW {
      * @param value  Value to assign to the key. Must be serializable.
      */
     async setItem<T>(key: string, value: T) {
-        const buf = await ser.serialize(key, value, this._compress);
-        this._buf.push(buf);
+        const buf = await ser.serialize(
+            this._lastIndex, key, value, this._compress
+        );
+        this._index[key] = [
+            buf.body,
+            this._size + buf.hdr + buf.key,
+        ];
+
+        this._size += buf.buf.length;
+        this._lastIndex += buf.buf.length;
+        this._kvpSize += buf.buf.length;
+
+        this._buf.push(buf.buf);
         if (this._push)
             this._push();
-        this._size += buf.length;
+
+        await this._maybeWriteIndex();
+
         return value;
     }
 
@@ -69,6 +87,38 @@ export class AOKVW {
     }
 
     /**
+     * @private
+     * Write the index if we should.
+     */
+    private async _maybeWriteIndex() {
+        if (
+            this._lastIndex >= 0x40000000 ||
+            (
+                this._kvpSize >= 0x10000 &&
+                this._kvpSize >= this._indexSize * 64
+            )
+        ) {
+            await this._writeIndex();
+        }
+    }
+
+    /**
+     * @private
+     * Write the index.
+     */
+    private async _writeIndex() {
+        const buf = await ser.serializeIndex(this._index, this._compress);
+
+        this._size += buf.length;
+        this._lastIndex = buf.length;
+        this._indexSize += buf.length;
+
+        this._buf.push(buf);
+        if (this._push)
+            this._push();
+    }
+
+    /**
      * Get the total size of all data written thusfar, in bytes.
      */
     size() {
@@ -79,6 +129,7 @@ export class AOKVW {
      * Indicate that streaming is finished.
      */
     async end() {
+        await this._writeIndex();
         this._buf.push(null);
         if (this._push)
             this._push();
@@ -106,4 +157,28 @@ export class AOKVW {
      * Total size of all data written thusfar.
      */
     private _size: number;
+
+    /**
+     * @private
+     * Index of all data in the AOKV.
+     */
+    private _index: Record<string, [number, number]>;
+
+    /**
+     * @private
+     * Offset since the index was last written.
+     */
+    private _lastIndex: number;
+
+    /**
+     * @private
+     * Total amount of KVP data that has been written.
+     */
+    private _kvpSize: number;
+
+    /**
+     * @private
+     * Total amount of index data that has been written.
+     */
+    private _indexSize: number;
 }

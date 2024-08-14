@@ -14,12 +14,25 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-import {aokvHeader, SerType, Descriptor, Header} from "./format";
+import * as f from "./format";
+
+export interface KVPHeaderInfo {
+    type: "kvp";
+    key: number;
+    body: number;
+}
+
+export interface IndexHeaderInfo {
+    type: "index";
+    index: number;
+}
+
+export type HeaderInfo = KVPHeaderInfo | IndexHeaderInfo | null;
 
 /**
  * Deserialize an AOKV header, to get information on how much to read for the
  * body.
- * @param header  16-byte header
+ * @param header  Header data
  * @param opts  Other options
  */
 export function deserializeHeader(data: Uint8Array, opts: {
@@ -27,26 +40,57 @@ export function deserializeHeader(data: Uint8Array, opts: {
      * Demand correct header info.
      */
     checkHeader?: boolean
-} = {}) {
-    const dU32 = new Uint32Array(data.buffer, data.byteOffset, data.byteLength / 4);
-    if (opts.checkHeader) {
-        if (dU32[Header.Magic0] !== aokvHeader[0] ||
-            dU32[Header.Magic1] !== aokvHeader[1])
+} = {}): HeaderInfo {
+    const dU32 = new Uint32Array(
+        data.buffer, data.byteOffset, ~~(data.byteLength / 4)
+    );
+
+    if (dU32.length < f.MagicHeader.SizeU32) {
+        if (opts.checkHeader)
             throw new Error("AOKV header mismatch");
+        return null;
     }
 
-    return {
-        key: dU32[Header.KeySz],
-        body: dU32[Header.BodySz]
-    };
+    if (opts.checkHeader && dU32[f.MagicHeader.Magic0] !== f.aokvMagic)
+        throw new Error("AOKV header mismatch");
+
+    const magic1 = dU32[f.MagicHeader.Magic1];
+
+    switch (magic1) {
+        case f.aokvMagicIndex:
+            if (dU32.length < f.IndexHeader.SizeU32) {
+                if (opts.checkHeader)
+                    throw new Error("AOKV index header mismatch");
+                return null;
+            }
+            return {
+                type: "index",
+                index: dU32[f.IndexHeader.IndexSz]
+            };
+
+        default: // KVP
+            if (
+                dU32.length < f.KVPHeader.SizeU32 ||
+                (opts.checkHeader && magic1 !== f.aokvMagicKVP)
+            ) {
+                if (opts.checkHeader)
+                    throw new Error("AOVK KVP header mismatch");
+                return null;
+            }
+            return {
+                type: "kvp",
+                key: dU32[f.KVPHeader.KeySz],
+                body: dU32[f.KVPHeader.BodySz]
+            };
+    }
 }
 
 /**
- * Deserialize this body, as serialized by `serialize`, into a value.
+ * Deserialize this KVP body, as serialized by `serialize`, into a value.
  * @param body  Body to deserialize.
  * @param decompress  Function to decompress, if applicable.
  */
-export async function deserialize(
+export async function deserializeKVP(
     body: Uint8Array,
     decompress?: (x: Uint8Array) => Promise<Uint8Array>
 ) {
@@ -57,7 +101,7 @@ export async function deserialize(
     }
 
     const descSz = (new Uint32Array(body.buffer, body.byteOffset, 1))[0];
-    const desc: Descriptor = JSON.parse(new TextDecoder().decode(
+    const desc: f.Descriptor = JSON.parse(new TextDecoder().decode(
         body.subarray(4, 4 + descSz)
     ));
 
@@ -67,7 +111,7 @@ export async function deserialize(
 
     let ret: any;
     switch (desc.t) {
-        case SerType.TypedArray:
+        case f.SerType.TypedArray:
         {
             let ta: any;
             switch (desc.a) {
@@ -88,11 +132,11 @@ export async function deserialize(
             break;
         }
 
-        case SerType.ArrayBuffer:
+        case f.SerType.ArrayBuffer:
             ret = post!.buffer;
             break;
 
-        case SerType.JSON:
+        case f.SerType.JSON:
             ret = desc.d;
             break;
 

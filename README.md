@@ -135,11 +135,16 @@ AOKV files are written in native endianness, so typically little-endian.
 
 An AOKV file consists of a sequence of AOKV blocks. There is no header to the
 entire AOKV file; instead, an AOKV file can be recognized by the header to the
-first block in the file.
+first block in the file. There are two types of AOKV blocks: key-value pair
+blocks, and index blocks. The first block in any AOKV file is always a KVP
+block.
 
-An AOKV block consists of a block header, the key (in UTF-8), and a body.
+### KVP blocks
 
-A block header is four 32-bit unsigned integers. The first two are just
+An AOKV key-value pair block consists of a block header, the key (in UTF-8), a
+body, and a footer.
+
+A KVP block header is four 32-bit unsigned integers. The first two are just
 identification magic, and are always 0x564b4f41, 0x93c1af97. Note that in
 little-endian, the first value is the ASCII string `"AOKV"`. The second is just
 a random, unique number for identification. The third word is the length of the
@@ -192,3 +197,23 @@ fifth byte is `{`. Because this is the method to check for compression, if the
 compression function *happens* to output a byte sequence in which the fifth byte
 is `{`, then it isn't used, and the data is written uncompressed, even if
 compression would have reduced the size.
+
+The footer is the distance, in bytes, back from the footer itself to the nearest
+index block.
+
+### Index blocks
+
+An index block is an index of all of the key-value pairs written so far. It
+consists of a block header, an index, and a footer.
+
+The block header consists of three 32-bit unsigned integers. The first two are
+just identification magic, and are always 0x564b4f41, 0x93c1af98. The third is
+the length of the index, in bytes.
+
+The index is a JSON-encoded mapping of keys to [size, offset] pairs. The sizes
+and offsets are absolute.
+
+It is possible to recreate any AOKV file's index without an index block, but for
+large files, it is much faster to recreate with it.
+
+The footer is the same as in KVP blocks.

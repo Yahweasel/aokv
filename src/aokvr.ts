@@ -18,8 +18,8 @@ import * as f from "./format";
 import * as ser from "./deserializer";
 
 interface BodyLoc {
-    offset: number;
     size: number;
+    offset: number;
 }
 
 /**
@@ -33,6 +33,11 @@ export class AOKVR {
          * Function for reading from the input.
          */
         private _pread: (count: number, offset: number) => Promise<Uint8Array | null>,
+
+        /**
+         * Total size, in bytes, of the file being read.
+         */
+        private _fileSize: number,
 
         /**
          * Optional function to decompress. Must match the input compression.
@@ -50,25 +55,77 @@ export class AOKVR {
         checkHeaders?: boolean
     } = {}) {
         const td = new TextDecoder();
-        let offset = 0;
-        while (true) {
-            const hdr = await this._pread(f.Header.SizeU8, offset);
-            offset += f.Header.SizeU8;
 
-            // Check the first header
-            if (offset === 0 && !opts.noCheckFirstHeader) {
-                if (!hdr || hdr.length < f.Header.SizeU8)
-                    throw new Error("Invalid AOKV file");
-                const hdrU32 = new Uint32Array(
-                    hdr.buffer, hdr.byteOffset, hdr.byteLength / 4
-                );
-                if (hdrU32[f.Header.Magic0] !== f.aokvHeader[0] ||
-                    hdrU32[f.Header.Magic1] !== f.aokvHeader[1]) {
-                    throw new Error("Invalid AOKV file");
-                }
+        if (!opts.noCheckFirstHeader) {
+            // Check that this is an AOKV file
+            const hdr = await this._pread(f.MagicHeader.SizeU8, 0);
+            if (!hdr || hdr.length < f.MagicHeader.SizeU8)
+                throw new Error("Invalid AOKV file");
+            const hdrU32 = new Uint32Array(
+                hdr.buffer, hdr.byteOffset, f.MagicHeader.SizeU32
+            );
+            if (hdrU32[0] !== f.aokvMagic || hdrU32[1] !== f.aokvMagicKVP)
+                throw new Error("Invalid AOKV file");
+        }
+
+        // Start from the back, looking for an index or indices
+        let offset = this._fileSize;
+        do {
+            offset -= 4;
+
+            const lastIndexU8 = await this._pread(4, offset);
+            if (!lastIndexU8 || lastIndexU8.length < 4) {
+                offset = 0;
+                break;
+            }
+            const lastIndexU32 = new Uint32Array(
+                lastIndexU8.buffer, lastIndexU8.byteOffset, 1
+            );
+            offset -= lastIndexU32[0];
+            if (offset < 0) {
+                offset = 0;
+                break;
             }
 
-            if (!hdr || hdr.length < f.Header.SizeU8)
+            // Check that this is an index
+            const hdr = await this._pread(f.maxHeaderSizeU8, offset);
+            if (!hdr || hdr.length < f.IndexHeader.SizeU8) {
+                offset = 0;
+                break;
+            }
+            const hdrU32 = new Uint32Array(
+                hdr.buffer, hdr.byteOffset, f.IndexHeader.SizeU32
+            );
+            if (hdrU32[0] !== f.aokvMagic || hdrU32[1] !== f.aokvMagicIndex) {
+                offset = 0;
+                break;
+            }
+            offset += f.IndexHeader.SizeU8;
+
+            // Index it
+            const indexSz = hdrU32[f.IndexHeader.IndexSz];
+            let indexU8 = await this._pread(indexSz, offset);
+            if (!indexU8 || indexU8.length < indexSz) {
+                offset = 0;
+                break;
+            }
+            if (this._decompress && indexU8.length && indexU8[0] !== 0x7b)
+                indexU8 = await this._decompress(indexU8);
+            offset += indexSz + 4;
+            const index = JSON.parse(td.decode(indexU8));
+            for (const key in index) {
+                this._index[key] = {
+                    size: index[key][0],
+                    offset: index[key][1]
+                };
+            }
+        } while (false);
+
+        // Now go through every header after the index
+        while (true) {
+            const hdr = await this._pread(f.maxHeaderSizeU8, offset);
+
+            if (!hdr || hdr.length < f.MagicHeader.SizeU8)
                 break;
 
             // Get header info
@@ -76,18 +133,30 @@ export class AOKVR {
                 checkHeader: opts.checkHeaders
             });
 
-            const keyU8 = await this._pread(info.key, offset);
-            if (!keyU8 || keyU8.length < info.key)
+            if (!info)
                 break;
-            offset += info.key;
-            const key = td.decode(keyU8);
 
-            // Index it
-            this._index[key] = {
-                size: info.body,
-                offset
-            };
-            offset += info.body;
+            if (info.type === "index") {
+                // We don't care about indices, so just skip it
+                offset += f.IndexHeader.SizeU8 + info.index + 4;
+
+            } else { // kvp
+                offset += f.KVPHeader.SizeU8;
+
+                const keyU8 = await this._pread(info.key, offset);
+                if (!keyU8 || keyU8.length < info.key)
+                    break;
+                offset += info.key;
+                const key = td.decode(keyU8);
+
+                // Index it
+                this._index[key] = {
+                    size: info.body,
+                    offset
+                };
+                offset += info.body + 4;
+
+            }
         }
     }
 
@@ -111,7 +180,7 @@ export class AOKVR {
         if (!body || body.length < info.size)
             return null;
 
-        return <T> ser.deserialize(body, this._decompress);
+        return <T> ser.deserializeKVP(body, this._decompress);
     }
 
     /**

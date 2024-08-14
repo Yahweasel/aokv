@@ -14,24 +14,26 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-import {aokvHeader, SerType, Descriptor, Header} from "./format";
+import * as f from "./format";
 
 /**
  * Serialize this data into binary data as a Uint8Array. data may be an
  * ArrayBuffer view, or anything JSON serializable.
+ * @param lastIndexOffset  Offset of the most recent index.
  * @param key  Key to assign to this data.
  * @param data  Data to serialize.
  * @param compress  Optional function to compress data.
  */
 export async function serialize(
-    key: string, data: any, compress?: (x: Uint8Array) => Promise<Uint8Array>
+    lastIndexOffset: number, key: string, data: any,
+    compress?: (x: Uint8Array) => Promise<Uint8Array>
 ) {
-    let desc: Descriptor = {t: SerType.JSON}; 
+    let desc: f.Descriptor = {t: f.SerType.JSON}; 
     let post: Uint8Array | null = null;
 
     // Serialize TypedArrays
     if (data && data.buffer && data.buffer instanceof ArrayBuffer) {
-        desc.t = SerType.TypedArray;
+        desc.t = f.SerType.TypedArray;
         if (data instanceof Uint8Array) {
             desc.a = "Uint8Array";
         } else if (data instanceof Uint8ClampedArray) {
@@ -57,7 +59,7 @@ export async function serialize(
         post = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 
     } else if (data instanceof ArrayBuffer) {
-        desc.t = SerType.ArrayBuffer;
+        desc.t = f.SerType.ArrayBuffer;
         post = new Uint8Array(data);
 
     } else {
@@ -90,17 +92,74 @@ export async function serialize(
     }
 
     const serialized = new Uint8Array(
-        Header.SizeU8 +
+        f.KVPHeader.SizeU8 +
         keyU8.length +
-        body.length
+        body.length +
+        4
     );
-    const serU32 = new Uint32Array(serialized.buffer, 0, Header.SizeU32);
-    serU32[Header.Magic0] = aokvHeader[0];
-    serU32[Header.Magic1] = aokvHeader[1];
-    serU32[Header.KeySz] = keyU8.length;
-    serU32[Header.BodySz] = body.length;
-    serialized.set(keyU8, Header.SizeU8);
-    serialized.set(body, Header.SizeU8 + keyU8.length);
+    const serU32 = new Uint32Array(
+        serialized.buffer, 0, f.KVPHeader.SizeU32
+    );
+    serU32[f.MagicHeader.Magic0] = f.aokvMagic;
+    serU32[f.MagicHeader.Magic1] = f.aokvMagicKVP;
+    serU32[f.KVPHeader.KeySz] = keyU8.length;
+    serU32[f.KVPHeader.BodySz] = body.length;
+    serialized.set(keyU8, f.KVPHeader.SizeU8);
+    serialized.set(
+        body, f.KVPHeader.SizeU8 + keyU8.length
+    );
+    const serDV = new DataView(serialized.buffer);
+    serDV.setUint32(
+        f.KVPHeader.SizeU8 + keyU8.length + body.length,
+        lastIndexOffset + f.KVPHeader.SizeU8 + keyU8.length + body.length,
+        true
+    );
 
-    return serialized;
+    return {
+        buf: serialized,
+        hdr: f.KVPHeader.SizeU8,
+        key: keyU8.length,
+        body: body.length,
+        foot: 4
+    };
+}
+
+/**
+ * Serialize this index.
+ * @param index  Index to serialize.
+ */
+export async function serializeIndex(
+    index: any, compress?: (x: Uint8Array) => Promise<Uint8Array>
+) {
+    let indexU8 = new TextEncoder().encode(
+        JSON.stringify(index)
+    );
+
+    if (compress) {
+        const c = await compress(indexU8);
+        if (c.length < indexU8.length && c.length && c[0] !== 0x7b)
+            indexU8 = c;
+    }
+
+    const buf = new Uint8Array(
+        f.IndexHeader.SizeU8 +
+        indexU8.length +
+        4
+    );
+
+    const hdrU32 = new Uint32Array(
+        buf.buffer, 0, f.IndexHeader.SizeU32
+    );
+    hdrU32[f.MagicHeader.Magic0] = f.aokvMagic;
+    hdrU32[f.MagicHeader.Magic1] = f.aokvMagicIndex;
+    hdrU32[f.IndexHeader.IndexSz] = indexU8.length;
+    buf.set(indexU8, f.IndexHeader.SizeU8);
+    const bufDV = new DataView(buf.buffer);
+    bufDV.setUint32(
+        f.IndexHeader.SizeU8 + indexU8.length,
+        f.IndexHeader.SizeU8 + indexU8.length,
+        true
+    );
+
+    return buf;
 }
