@@ -136,21 +136,28 @@ AOKV files are written in native endianness, so typically little-endian.
 An AOKV file consists of a sequence of AOKV blocks. There is no header to the
 entire AOKV file; instead, an AOKV file can be recognized by the header to the
 first block in the file. There are two types of AOKV blocks: key-value pair
-blocks, and index blocks. The first block in any AOKV file is always a KVP
-block.
+blocks, and index blocks.
+
+Each block consists of a header, content, and footer. The header consists of
+three 32-bit unsigned integers. The first two are just identification magic, and
+the third is the size of the entire block, including the header and footer. The
+first magic word is always 0x564b4f41. Note that in little-endian, the first
+value is the ASCII string `"AOKV"`.
+
+The footer is the distance, in bytes, back from the footer itself to the nearest
+index block.
 
 ### KVP blocks
 
-An AOKV key-value pair block consists of a block header, the key (in UTF-8), a
-body, and a footer.
+The content of a key-value pair block consists of the length of the key in
+bytes, the key, and a body.
 
-A KVP block header is four 32-bit unsigned integers. The first two are just
-identification magic, and are always 0x564b4f41, 0x93c1af97. Note that in
-little-endian, the first value is the ASCII string `"AOKV"`. The second is just
-a random, unique number for identification. The third word is the length of the
-key in bytes, and the fourth word is the length of the body in bytes.
+The key length is encoded as a 32-bit unsigned integer.
 
 The key is simply a UTF-8 string.
+
+The length of the body is inferred from the length of the block and the length
+of the key.
 
 The body consists of the length of the descriptor in bytes, the descriptor, and
 a “post”. The length of the descriptor is written as a 32-bit unsigned integer.
@@ -198,22 +205,12 @@ compression function *happens* to output a byte sequence in which the fifth byte
 is `{`, then it isn't used, and the data is written uncompressed, even if
 compression would have reduced the size.
 
-The footer is the distance, in bytes, back from the footer itself to the nearest
-index block.
-
 ### Index blocks
 
-An index block is an index of all of the key-value pairs written so far. It
-consists of a block header, an index, and a footer.
+An index block is an index of all of the key-value pairs written so far.
 
-The block header consists of three 32-bit unsigned integers. The first two are
-just identification magic, and are always 0x564b4f41, 0x93c1af98. The third is
-the length of the index, in bytes.
-
-The index is a JSON-encoded mapping of keys to [size, offset] pairs. The sizes
-and offsets are absolute.
+The content of an index block is the index, which is a JSON-encoded mapping of
+keys to [size, offset] pairs. The sizes and offsets are absolute.
 
 It is possible to recreate any AOKV file's index without an index block, but for
 large files, it is much faster to recreate with it.
-
-The footer is the same as in KVP blocks.

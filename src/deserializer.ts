@@ -16,18 +16,27 @@
 
 import * as f from "./format";
 
-export interface KVPHeaderInfo {
+export interface GenHeaderInfo {
+    size: number;
+}
+
+export interface KVPHeaderInfo extends GenHeaderInfo {
     type: "kvp";
     key: number;
     body: number;
 }
 
-export interface IndexHeaderInfo {
+export interface IndexHeaderInfo extends GenHeaderInfo {
     type: "index";
     index: number;
 }
 
-export type HeaderInfo = KVPHeaderInfo | IndexHeaderInfo | null;
+export interface UnknownHeaderInfo extends GenHeaderInfo {
+    type: "unknown";
+}
+
+export type HeaderInfo =
+    KVPHeaderInfo | IndexHeaderInfo | UnknownHeaderInfo | null;
 
 /**
  * Deserialize an AOKV header, to get information on how much to read for the
@@ -57,30 +66,43 @@ export function deserializeHeader(data: Uint8Array, opts: {
     const magic1 = dU32[f.MagicHeader.Magic1];
 
     switch (magic1) {
-        case f.aokvMagicIndex:
-            if (dU32.length < f.IndexHeader.SizeU32) {
+        case f.aokvMagicKVP: // KVP
+        {
+            if (dU32.length < f.KVPHeader.SizeU32) {
                 if (opts.checkHeader)
-                    throw new Error("AOKV index header mismatch");
+                    throw new Error("AOKV KVP header mismatch");
                 return null;
             }
-            return {
-                type: "index",
-                index: dU32[f.IndexHeader.IndexSz]
-            };
 
-        default: // KVP
-            if (
-                dU32.length < f.KVPHeader.SizeU32 ||
-                (opts.checkHeader && magic1 !== f.aokvMagicKVP)
-            ) {
-                if (opts.checkHeader)
-                    throw new Error("AOVK KVP header mismatch");
-                return null;
-            }
+            const blockSz = dU32[f.MagicHeader.BlockSz];
+            const keySz = dU32[f.KVPHeader.KeySz];
             return {
                 type: "kvp",
-                key: dU32[f.KVPHeader.KeySz],
-                body: dU32[f.KVPHeader.BodySz]
+                size: blockSz,
+                key: keySz,
+                body: blockSz - f.KVPHeader.SizeU8 - keySz - 4
+            };
+        }
+
+        case f.aokvMagicIndex:
+        {
+            const blockSz = dU32[f.MagicHeader.BlockSz];
+            return {
+                type: "index",
+                size: blockSz,
+                index: blockSz - f.MagicHeader.SizeU8 - 4
+            };
+        }
+
+        default:
+            if (opts.checkHeader &&
+                (magic1 < f.aokvMagicKVP ||
+                 magic1 >= f.aokvMagicMax)) {
+                throw new Error("AOKV invalid header");
+            }
+            return {
+                type: "unknown",
+                size: dU32[f.MagicHeader.BlockSz]
             };
     }
 }

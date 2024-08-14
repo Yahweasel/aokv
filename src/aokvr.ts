@@ -88,22 +88,22 @@ export class AOKVR {
             }
 
             // Check that this is an index
-            const hdr = await this._pread(f.maxHeaderSizeU8, offset);
-            if (!hdr || hdr.length < f.IndexHeader.SizeU8) {
+            const hdr = await this._pread(f.MagicHeader.SizeU8, offset);
+            if (!hdr || hdr.length < f.MagicHeader.SizeU8) {
                 offset = 0;
                 break;
             }
             const hdrU32 = new Uint32Array(
-                hdr.buffer, hdr.byteOffset, f.IndexHeader.SizeU32
+                hdr.buffer, hdr.byteOffset, f.MagicHeader.SizeU32
             );
             if (hdrU32[0] !== f.aokvMagic || hdrU32[1] !== f.aokvMagicIndex) {
                 offset = 0;
                 break;
             }
-            offset += f.IndexHeader.SizeU8;
+            offset += f.MagicHeader.SizeU8;
 
             // Index it
-            const indexSz = hdrU32[f.IndexHeader.IndexSz];
+            const indexSz = hdrU32[f.MagicHeader.BlockSz] - f.MagicHeader.SizeU8;
             let indexU8 = await this._pread(indexSz, offset);
             if (!indexU8 || indexU8.length < indexSz) {
                 offset = 0;
@@ -136,9 +136,8 @@ export class AOKVR {
             if (!info)
                 break;
 
-            if (info.type === "index") {
-                // We don't care about indices, so just skip it
-                offset += f.IndexHeader.SizeU8 + info.index + 4;
+            if (info.type !== "kvp") {
+                offset += info.size;
 
             } else { // kvp
                 offset += f.KVPHeader.SizeU8;

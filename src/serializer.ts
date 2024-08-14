@@ -102,8 +102,8 @@ export async function serialize(
     );
     serU32[f.MagicHeader.Magic0] = f.aokvMagic;
     serU32[f.MagicHeader.Magic1] = f.aokvMagicKVP;
+    serU32[f.MagicHeader.BlockSz] = serialized.length;
     serU32[f.KVPHeader.KeySz] = keyU8.length;
-    serU32[f.KVPHeader.BodySz] = body.length;
     serialized.set(keyU8, f.KVPHeader.SizeU8);
     serialized.set(
         body, f.KVPHeader.SizeU8 + keyU8.length
@@ -142,22 +142,22 @@ export async function serializeIndex(
     }
 
     const buf = new Uint8Array(
-        f.IndexHeader.SizeU8 +
+        f.MagicHeader.SizeU8 +
         indexU8.length +
         4
     );
 
     const hdrU32 = new Uint32Array(
-        buf.buffer, 0, f.IndexHeader.SizeU32
+        buf.buffer, 0, f.MagicHeader.SizeU32
     );
     hdrU32[f.MagicHeader.Magic0] = f.aokvMagic;
     hdrU32[f.MagicHeader.Magic1] = f.aokvMagicIndex;
-    hdrU32[f.IndexHeader.IndexSz] = indexU8.length;
-    buf.set(indexU8, f.IndexHeader.SizeU8);
+    hdrU32[f.MagicHeader.BlockSz] = buf.length;
+    buf.set(indexU8, f.MagicHeader.SizeU8);
     const bufDV = new DataView(buf.buffer);
     bufDV.setUint32(
-        f.IndexHeader.SizeU8 + indexU8.length,
-        f.IndexHeader.SizeU8 + indexU8.length,
+        f.MagicHeader.SizeU8 + indexU8.length,
+        f.MagicHeader.SizeU8 + indexU8.length,
         true
     );
 

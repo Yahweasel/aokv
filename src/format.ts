@@ -23,24 +23,21 @@ export const aokvMagicKVP = 0x93c1af97;
 // Magic number: index
 export const aokvMagicIndex = 0x93c1af98;
 
+// Maximum magic number allowed
+export const aokvMagicMax = 0x93c1b097;
+
 export enum MagicHeader {
-    SizeU8 = 8,
-    SizeU32 = 2,
+    SizeU8 = 12,
+    SizeU32 = 3,
     Magic0 = 0,
-    Magic1 = 1
+    Magic1 = 1,
+    BlockSz = 2
 }
 
 export enum KVPHeader {
-    SizeU8 = MagicHeader.SizeU8 + 8,
-    SizeU32 = MagicHeader.SizeU32 + 2,
-    KeySz = 2,
-    BodySz = 3
-}
-
-export enum IndexHeader {
     SizeU8 = MagicHeader.SizeU8 + 4,
     SizeU32 = MagicHeader.SizeU32 + 1,
-    IndexSz = 2
+    KeySz = 3
 }
 
 export const maxHeaderSizeU8 = KVPHeader.SizeU8;
