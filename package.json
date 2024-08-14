@@ -1,6 +1,6 @@
 {
   "name": "aokv",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Append-only key-value store",
   "main": "dist/aokv.js",
   "types": "src/aokv.ts",
