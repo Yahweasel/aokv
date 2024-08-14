@@ -214,3 +214,5 @@ keys to [size, offset] pairs. The sizes and offsets are absolute.
 
 It is possible to recreate any AOKV file's index without an index block, but for
 large files, it is much faster to recreate with it.
+
+Indices can be compressed, like the body of KVP blocks.
