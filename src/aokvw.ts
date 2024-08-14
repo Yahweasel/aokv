@@ -22,12 +22,20 @@ import * as ser from "./serializer";
  * to write to the file.
  */
 export class AOKVW {
-    constructor(
+    constructor(opts: {
         /**
-         * Function to compress a data chunk.
+         * Optional identifier to distinguish your application's AOKV files from
+         * other AOKV files.
          */
-        private _compress?: (x: Uint8Array) => Promise<Uint8Array>
-    ) {
+        fileId?: number,
+
+        /**
+         * Optional function to compress a data chunk.
+         */
+        compress?: (x: Uint8Array) => Promise<Uint8Array>
+    }) {
+        this._fileId = opts.fileId || 0;
+        this._compress = opts.compress;
         this._buf = [];
         this._size = 0;
         this._index = Object.create(null);
@@ -57,7 +65,7 @@ export class AOKVW {
      */
     async setItem<T>(key: string, value: T) {
         const buf = await ser.serialize(
-            this._lastIndex, key, value, this._compress
+            key, value, this._lastIndex, this._fileId, this._compress
         );
         this._index[key] = [
             buf.body,
@@ -107,7 +115,9 @@ export class AOKVW {
      * Write the index.
      */
     private async _writeIndex() {
-        const buf = await ser.serializeIndex(this._index, this._compress);
+        const buf = await ser.serializeIndex(
+            this._index, this._fileId, this._compress
+        );
 
         this._size += buf.length;
         this._lastIndex = buf.length;
@@ -139,6 +149,12 @@ export class AOKVW {
      * Stream of data being written.
      */
     stream: ReadableStream<Uint8Array>;
+
+    /**
+     * @private
+     * ID of generated file.
+     */
+    private _fileId: number;
 
     /**
      * @private
@@ -181,4 +197,10 @@ export class AOKVW {
      * Total amount of index data that has been written.
      */
     private _indexSize: number;
+
+    /**
+     * @private
+     * Compression function.
+     */
+    private _compress?: (x: Uint8Array) => Promise<Uint8Array>;
 }

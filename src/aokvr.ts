@@ -22,28 +22,40 @@ interface BodyLoc {
     offset: number;
 }
 
+type preadT = (count: number, offset: number) => Promise<Uint8Array | null>;
+
 /**
  * An append-only key-value store reader. Must be provided with a pread callback
  * that reads a specified part of a file and returns a (possibly short)
  * Uint8Array, or null if past EOF. The pread should not throw.
  */
 export class AOKVR {
-    constructor(
+    constructor(opts: {
+        /**
+         * Total size of the file, in bytes, if known.
+         */
+        size?: number,
+
         /**
          * Function for reading from the input.
          */
-        private _pread: (count: number, offset: number) => Promise<Uint8Array | null>,
+        pread: preadT,
 
         /**
-         * Total size, in bytes, of the file being read.
+         * Optional identifier to distinguish your application's AOKV files from
+         * other AOKV files. Must match the write ID.
          */
-        private _fileSize: number,
+        fileId?: number,
 
         /**
-         * Optional function to decompress. Must match the input compression.
+         * Optional function to decompress. Must match the write compression.
          */
-        private _decompress?: (x: Uint8Array) => Promise<Uint8Array>
-    ) {
+        decompress?: (x: Uint8Array) => Promise<Uint8Array>
+    }) {
+        this._fileSize = opts.size || 0;
+        this._pread = opts.pread;
+        this._fileId = opts.fileId || 0;
+        this._decompress = opts.decompress;
         this._index = Object.create(null);
     }
 
@@ -64,7 +76,8 @@ export class AOKVR {
             const hdrU32 = new Uint32Array(
                 hdr.buffer, hdr.byteOffset, f.MagicHeader.SizeU32
             );
-            if (hdrU32[0] !== f.aokvMagic || hdrU32[1] !== f.aokvMagicKVP)
+            if (hdrU32[0] !== f.aokvMagic ||
+                ~~hdrU32[1] !== ~~(f.aokvMagicKVP + this._fileId))
                 throw new Error("Invalid AOKV file");
         }
 
@@ -96,7 +109,8 @@ export class AOKVR {
             const hdrU32 = new Uint32Array(
                 hdr.buffer, hdr.byteOffset, f.MagicHeader.SizeU32
             );
-            if (hdrU32[0] !== f.aokvMagic || hdrU32[1] !== f.aokvMagicIndex) {
+            if (hdrU32[0] !== f.aokvMagic ||
+                ~~hdrU32[1] !== ~~(f.aokvMagicIndex + this._fileId)) {
                 offset = 0;
                 break;
             }
@@ -129,7 +143,7 @@ export class AOKVR {
                 break;
 
             // Get header info
-            const info = await ser.deserializeHeader(hdr, {
+            const info = await ser.deserializeHeader(hdr, this._fileId, {
                 checkHeader: opts.checkHeaders
             });
 
@@ -183,6 +197,31 @@ export class AOKVR {
     }
 
     /**
+     * @private
+     * Reader function.
+     */
+    private _pread: preadT;
+
+    /**
+     * @private
+     * File size.
+     */
+    private _fileSize: number;
+
+    /**
+     * @private
+     * File identification.
+     */
+    private _fileId: number;
+
+    /**
+     * @private
+     * Decompressor.
+     */
+    private _decompress?: (x: Uint8Array) => Promise<Uint8Array>;
+
+    /**
+     * @private
      * Index of file data.
      */
     private _index: Record<string, BodyLoc>;

@@ -62,11 +62,30 @@ also import this module as `"aokv/read"` to get only the reading side, or
 
 ## Writing
 
-Create an AOKV writer instance with `w = new AOKV.AOKVW();`. `AOKVW` takes an
-optional parameter: a compression function, which will compress each entry in
-the store. If provided, it should be of type `(x:Uint8Array) =>
-Promise<Uint8Array>`, i.e., an asynchronous `Uint8Array`-to-`Uint8Array`
-function.
+Create an AOKV writer instance with `w = new AOKV.AOKVW();`.
+
+`AOKVW` takes an
+optional parameter, an object describing file options:
+```typescript
+{
+    /**
+     * Optional identifier to distinguish your application's AOKV files from
+     * other AOKV files.
+     */
+    fileId?: number,
+
+    /**
+     * Optional function to compress a data chunk.
+     */
+    compress?: (x: Uint8Array) => Promise<Uint8Array>
+}
+```
+
+The file ID, if used, is to distinguish your application's AOKV files from other
+AOKV files. You must use the same ID for writing and reading.
+
+The optional compression function, if present, will be used to compress each
+entry in the store.
 
 The `AOKVW` object exposes its output as the field `stream` (e.g., `w.stream`),
 which is a `ReadableStream` of `Uint8Array` chunks. You should start reading
@@ -99,18 +118,48 @@ read the stream.
 
 ## Reading
 
-Create an AOKV reader instance with `r = new AOKV.AOKVR(pread, size);`. `pread` is a
-function of the form `(count: number, offset: number) => Promise<Uint8Array |
+Create an AOKV reader instance with `r = new AOKV.AOKVR({...});`. The options
+object is mandatory, and has the following form:
+```typescript
+{
+    /**
+     * Total size of the file, in bytes, if known.
+     */
+    size?: number,
+
+    /**
+     * Function for reading from the input.
+     */
+    pread: preadT,
+
+    /**
+     * Optional identifier to distinguish your application's AOKV files from
+     * other AOKV files. Must match the write ID.
+     */
+    fileId?: number,
+
+    /**
+     * Optional function to decompress. Must match the write compression.
+     */
+    decompress?: (x: Uint8Array) => Promise<Uint8Array>
+}
+```
+
+If you know the file's size, you should provide it, as it will speed up
+indexing.
+
+`pread` is a function of the form `(count: number, offset: number) => Promise<Uint8Array |
 null>` which should read `count` bytes from `offset`, returning the read data as
 a `Uint8Array`. A short read or `null` are acceptable returns for end-of-file.
-`size` is the size of the file, in bytes. `AOKVR` takes an optional third
-parameter, a decompression function, which should be the reverse of the
-compression function provided to `AOKVW`.
+`size` is the size of the file, in bytes.
+
+The file ID, if present, should be the same as used in `AOKVW`, and
+`decompress`, if present, should be the reverse of `compress` in `AOKVW`.
 
 As it is common to use `AOKVR` with `Blob`s (or `File`s, which are a subtype of
 `Blob`), a convenience function is provided to create a `pread` for `Blob`s,
-`AOKV.blobToPread`. Use it like so: `r = new
-AOKV.AOKVR(AOKV.blobToPread(file), file.size);`.
+`AOKV.blobToPread`. Use it like so: `r = new AOKV.AOKVR({size: file.size, pread:
+AOKV.blobToPread(file)});`.
 
 Once you've created the `AOKVR` instance, before accessing data, you must index
 the file. Do so with `await r.index();`. `r.index` has some options to control

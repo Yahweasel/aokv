@@ -19,13 +19,14 @@ import * as f from "./format";
 /**
  * Serialize this data into binary data as a Uint8Array. data may be an
  * ArrayBuffer view, or anything JSON serializable.
- * @param lastIndexOffset  Offset of the most recent index.
  * @param key  Key to assign to this data.
  * @param data  Data to serialize.
+ * @param lastIndexOffset  Offset of the most recent index.
+ * @param fileId  ID to add to magic numbers.
  * @param compress  Optional function to compress data.
  */
 export async function serialize(
-    lastIndexOffset: number, key: string, data: any,
+    key: string, data: any, lastIndexOffset: number, fileId: number,
     compress?: (x: Uint8Array) => Promise<Uint8Array>
 ) {
     let desc: f.Descriptor = {t: f.SerType.JSON}; 
@@ -101,7 +102,7 @@ export async function serialize(
         serialized.buffer, 0, f.KVPHeader.SizeU32
     );
     serU32[f.MagicHeader.Magic0] = f.aokvMagic;
-    serU32[f.MagicHeader.Magic1] = f.aokvMagicKVP;
+    serU32[f.MagicHeader.Magic1] = f.aokvMagicKVP + fileId;
     serU32[f.MagicHeader.BlockSz] = serialized.length;
     serU32[f.KVPHeader.KeySz] = keyU8.length;
     serialized.set(keyU8, f.KVPHeader.SizeU8);
@@ -127,9 +128,12 @@ export async function serialize(
 /**
  * Serialize this index.
  * @param index  Index to serialize.
+ * @param fileId  ID to add to magic numbers.
+ * @param compress  Compression function.
  */
 export async function serializeIndex(
-    index: any, compress?: (x: Uint8Array) => Promise<Uint8Array>
+    index: any, fileId: number,
+    compress?: (x: Uint8Array) => Promise<Uint8Array>
 ) {
     let indexU8 = new TextEncoder().encode(
         JSON.stringify(index)
@@ -151,7 +155,7 @@ export async function serializeIndex(
         buf.buffer, 0, f.MagicHeader.SizeU32
     );
     hdrU32[f.MagicHeader.Magic0] = f.aokvMagic;
-    hdrU32[f.MagicHeader.Magic1] = f.aokvMagicIndex;
+    hdrU32[f.MagicHeader.Magic1] = f.aokvMagicIndex + fileId;
     hdrU32[f.MagicHeader.BlockSz] = buf.length;
     buf.set(indexU8, f.MagicHeader.SizeU8);
     const bufDV = new DataView(buf.buffer);

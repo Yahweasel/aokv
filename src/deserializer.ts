@@ -42,9 +42,10 @@ export type HeaderInfo =
  * Deserialize an AOKV header, to get information on how much to read for the
  * body.
  * @param header  Header data
+ * @param fileId  ID of the file, to offset magic numbers
  * @param opts  Other options
  */
-export function deserializeHeader(data: Uint8Array, opts: {
+export function deserializeHeader(data: Uint8Array, fileId: number, opts: {
     /**
      * Demand correct header info.
      */
@@ -63,10 +64,10 @@ export function deserializeHeader(data: Uint8Array, opts: {
     if (opts.checkHeader && dU32[f.MagicHeader.Magic0] !== f.aokvMagic)
         throw new Error("AOKV header mismatch");
 
-    const magic1 = dU32[f.MagicHeader.Magic1];
+    const magic1 = ~~dU32[f.MagicHeader.Magic1];
 
     switch (magic1) {
-        case f.aokvMagicKVP: // KVP
+        case (~~(f.aokvMagicKVP + fileId)): // KVP
         {
             if (dU32.length < f.KVPHeader.SizeU32) {
                 if (opts.checkHeader)
@@ -84,7 +85,7 @@ export function deserializeHeader(data: Uint8Array, opts: {
             };
         }
 
-        case f.aokvMagicIndex:
+        case (~~(f.aokvMagicIndex + fileId)):
         {
             const blockSz = dU32[f.MagicHeader.BlockSz];
             return {
@@ -96,8 +97,8 @@ export function deserializeHeader(data: Uint8Array, opts: {
 
         default:
             if (opts.checkHeader &&
-                (magic1 < f.aokvMagicKVP ||
-                 magic1 >= f.aokvMagicMax)) {
+                (magic1 < ~~(f.aokvMagicKVP + fileId) ||
+                 magic1 >= ~~(f.aokvMagicMax + fileId))) {
                 throw new Error("AOKV invalid header");
             }
             return {
