@@ -99,17 +99,18 @@ read the stream.
 
 ## Reading
 
-Create an AOKV reader instance with `r = new AOKV.AOKVR(pread);`. `pread` is a
+Create an AOKV reader instance with `r = new AOKV.AOKVR(pread, size);`. `pread` is a
 function of the form `(count: number, offset: number) => Promise<Uint8Array |
 null>` which should read `count` bytes from `offset`, returning the read data as
 a `Uint8Array`. A short read or `null` are acceptable returns for end-of-file.
-`AOKVR` takes an optional second parameter, a decompression function, which
-should be the reverse of the compression function provided to `AOKVW`.
+`size` is the size of the file, in bytes. `AOKVR` takes an optional third
+parameter, a decompression function, which should be the reverse of the
+compression function provided to `AOKVW`.
 
 As it is common to use `AOKVR` with `Blob`s (or `File`s, which are a subtype of
 `Blob`), a convenience function is provided to create a `pread` for `Blob`s,
 `AOKV.blobToPread`. Use it like so: `r = new
-AOKV.AOKVR(AOKV.blobToPread(file));`.
+AOKV.AOKVR(AOKV.blobToPread(file), file.size);`.
 
 Once you've created the `AOKVR` instance, before accessing data, you must index
 the file. Do so with `await r.index();`. `r.index` has some options to control
