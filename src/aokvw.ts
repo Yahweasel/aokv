@@ -63,9 +63,29 @@ export class AOKVW {
      * @param key  Key to set.
      * @param value  Value to assign to the key. Must be serializable.
      */
-    async setItem<T>(key: string, value: T) {
+    setItem<T>(key: string, value: T) {
+        return this._setItemC(key, value, this._compress);
+    }
+
+    /**
+     * Set an item, uncompressed.
+     * @param key  Key to set.
+     * @param value  Value to assign to the key. Must be serializable.
+     */
+    setItemUncompressed<T>(key: string, value: T) {
+        return this._setItemC(key, value);
+    }
+
+    /**
+     * @private
+     * setItem backend with optional compression.
+     */
+    private async _setItemC<T>(
+        key: string, value: T,
+        compress?: (x: Uint8Array) => Promise<Uint8Array>
+    ) {
         const buf = await ser.serialize(
-            key, value, this._lastIndex, this._fileId, this._compress
+            key, value, this._lastIndex, this._fileId, compress
         );
         this._index[key] = [
             buf.body,

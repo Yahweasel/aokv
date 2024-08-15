@@ -19,6 +19,8 @@ await w.setItem("hello", "world");
 await w.setItem("bleh", new Uint8Array([1, 2, 3, 4, 5]));
 await w.setItem("hello", "whoops");
 await w.setItem("an object here", {"this": {"is": {"an": "object"}}});
+await w.setItem("compressed", new Uint8Array(1024*1024));
+await w.setItemUncompressed("uncompressed", new Uint8Array(2*1024));
 await w.setItem("hello", "Hello, world!");
 await w.removeItem("amazing");
 await w.end();

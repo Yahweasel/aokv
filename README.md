@@ -97,6 +97,11 @@ a string, and the value can be anything JSON-serializable, or any ArrayBuffer or
 TypedArray. This and many other names are chosen to be familiar to users of
 [localForage](https://localforage.github.io/localForage/)
 
+If what you're storing is raw data (in an ArrayBuffer or TypedArray) that is
+already compressed, attempting to recompress it is likely to take CPU time and
+achieve nothing. To avoid this, a version of `setItem` that never compresses is
+provided, `await w.setItemUncompressed(key, value)`.
+
 `await w.removeItem(key);` is provided to “remove” an item from the store, but
 it's important to note that nothing can truly be removed, since the store is
 only ever appended to. Instead, this is just a convenience function to set the
